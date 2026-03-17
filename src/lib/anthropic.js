@@ -61,11 +61,11 @@ Responde SOLO este JSON con indices numericos:
 
     const data = await res.json();
     const parts = data.candidates?.[0]?.content?.parts || [];
-    const raw = parts.map(p => p.text || '').join('');
+    const raw = parts.map(p => p.text || '').join('').replace(/```json|```/g, '').trim();
     console.log('[Gemini] raw:', raw);
 
     // Extraer JSON — buscar el que tenga "i":
-    const match = raw.match(/\{"i"\s*:\s*\[[\d,\s]+\]\s*,\s*"r"\s*:\s*"[^"]*"\}/);
+    const match = raw.match(/\{[\s\S]*"i"\s*:\s*\[[\d,\s]*\][\s\S]*\}/);
     if (!match) {
       console.error('[Gemini] no match in:', raw);
       return { selectedIds: [], reasoning: 'No se pudo procesar la respuesta. Intentá de nuevo.' };
