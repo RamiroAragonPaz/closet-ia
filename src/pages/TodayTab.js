@@ -54,14 +54,16 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
       .map(id => garments.find(g => g.id === id))
       .filter(Boolean);
 
-    // Fallback inteligente: si Gemini falló, tomamos 1 de cada categoría principal
+    // Fallback inteligente: si Gemini falló, tomamos 1 de cada categoría
+    // shuffleando para que no sea siempre el mismo
     let finalPieces = pieces;
     if (!finalPieces.length) {
-      const pick = (types) => available.find(g => types.includes(g.type));
+      const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+      const pick = (types) => shuffle(available).find(g => types.includes(g.type));
       finalPieces = [
         pick(['camisa', 'remera']),
         pick(['pantalon', 'jeans']),
-        pick(['saco', 'buzo']),
+        pick(['zapatos', 'zapatillas', 'mocasines']),
       ].filter(Boolean);
     }
     setOutfit(finalPieces);

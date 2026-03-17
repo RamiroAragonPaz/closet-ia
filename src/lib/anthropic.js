@@ -66,13 +66,19 @@ RESPONDÉ ÚNICAMENTE con este JSON (sin texto antes ni después, sin comillas e
     }
 
     const data = await response.json();
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Gemini 2.5-flash incluye "thinking" antes de la respuesta — tomamos la última parte
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    // El último part con texto es la respuesta real (no el thinking)
+    const raw = parts.filter(p => p.text).map(p => p.text).join('');
     console.log('[Gemini] Raw:', raw);
 
-    // Extraer JSON aunque venga con markdown o texto extra
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    // Agarrar el ÚLTIMO objeto JSON del response (por si hay thinking con {} antes)
+    const jsonMatches = [...raw.matchAll(/\{[\s\S]*?\}/g)];
+    // Buscar el match que tenga "selectedIds"
+    const jsonMatch = jsonMatches.reverse().find(m => m[0].includes('selectedIds'));
     if (!jsonMatch) {
-      console.error('[Gemini] No JSON found in:', raw);
+      console.error('[Gemini] No JSON with selectedIds found in:', raw);
       return { selectedIds: [], reasoning: 'El asesor no devolvió un formato válido. Intentá generar otro outfit.' };
     }
 
