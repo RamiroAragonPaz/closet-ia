@@ -10,82 +10,72 @@ export async function selectOutfitWithAI({ availableGarments, recentOutfits, wea
     return { selectedIds: [], reasoning: 'No hay prendas disponibles.' };
   }
 
+  // Usamos índices numéricos cortos (0,1,2...) en lugar de IDs largos de Firestore
+  // Así el JSON de respuesta es mucho más corto y no se trunca
+  const indexMap = {};
+  available.forEach((g, i) => { indexMap[i] = g.id; });
+
   const garmentList = available
-    .map(g => `  {"id":"${g.id}","tipo":"${g.type}","color":"${g.colorName}","nombre":"${g.name}"}`)
+    .map((g, i) => `${i}:${g.type}|${g.colorName}|${g.name}`)
     .join('\n');
 
-  const historyDesc = recentOutfits.slice(0, 5)
-    .map(o => o.pieces?.map(p => p.name).join(' + '))
-    .filter(Boolean).join(' | ') || 'ninguno';
+  const historyDesc = recentOutfits.slice(0, 3)
+    .map(o => o.pieces?.map(p => p.name).join('+'))
+    .filter(Boolean).join(' / ') || 'ninguno';
 
-  const weatherDesc = weather?.temp
-    ? `${weather.temp}°C, ${weather.description}`
-    : 'templado';
+  const weatherDesc = weather?.temp ? `${weather.temp}°C` : 'templado';
 
-  const prompt = `Sos un asesor de imagen masculino, estilo smart casual para el trabajo.
+  const prompt = `Asesor de imagen masculino, smart casual laboral.
 
-GUARDARROPA DISPONIBLE:
-[
+PRENDAS (indice:tipo|color|nombre):
 ${garmentList}
-]
 
-CLIMA HOY EN LA PLATA: ${weatherDesc}
-OUTFITS RECIENTES (evitar repetir): ${historyDesc}
+CLIMA: ${weatherDesc}
+RECIENTES: ${historyDesc}
 
-TAREA: Elegir el mejor outfit posible siguiendo estas reglas estrictas:
-1. Elegí EXACTAMENTE 1 top: camisa o remera (obligatorio)
-2. Elegí EXACTAMENTE 1 bottom: pantalon o jeans (obligatorio)
-3. Elegí EXACTAMENTE 1 calzado: zapatos, zapatillas o mocasines (obligatorio si hay disponible)
-4. Saco/buzo: SOLO incluirlo si el clima lo justifica (frio o templado) Y si realmente mejora el look. Si hace calor (mas de 22°C) no incluyas capa exterior.
-5. Cinturón: incluirlo solo si hay disponible Y combina con el calzado elegido.
-6. NUNCA incluyas 2 prendas del mismo tipo.
-7. Priorizá paleta de colores coherente.
-8. No repitas prendas usadas recientemente si hay alternativas.
+REGLAS:
+- 1 top (camisa/remera), 1 bottom (pantalon/jeans), 1 calzado si hay
+- Saco/buzo solo si hace frio o templado (menos de 22C)
+- Cinturon solo si combina con calzado elegido
+- Nunca 2 del mismo tipo
+- Paleta coherente, no repetir recientes
 
-RESPONDÉ ÚNICAMENTE con este JSON (sin texto antes ni después, sin comillas extra, sin markdown):
-{"selectedIds":["id1","id2","id3"],"reasoning":"3 oraciones en español explicando por qué funciona esta combinación."}`;
+Responde SOLO este JSON con indices numericos:
+{"i":[0,1,2],"r":"explicacion en 2 oraciones"}`;
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-    const response = await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: 1500,
-          temperature: 0.3,
-        },
+        generationConfig: { maxOutputTokens: 200, temperature: 0.4 },
       }),
     });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      console.error('[Gemini] Error', response.status, errData);
-      return { selectedIds: [], reasoning: `Error IA (${response.status}): ${errData?.error?.message || 'sin detalle'}` };
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      return { selectedIds: [], reasoning: `Error IA (${res.status}): ${e?.error?.message || ''}` };
     }
 
-    const data = await response.json();
-
-    // Gemini 2.5-flash incluye "thinking" antes de la respuesta — tomamos la última parte
+    const data = await res.json();
     const parts = data.candidates?.[0]?.content?.parts || [];
-    // El último part con texto es la respuesta real (no el thinking)
-    const raw = parts.filter(p => p.text).map(p => p.text).join('');
-    console.log('[Gemini] Raw:', raw);
+    const raw = parts.map(p => p.text || '').join('');
+    console.log('[Gemini] raw:', raw);
 
-    // Agarrar el JSON que contenga selectedIds — greedy para capturar todo
-    const jsonMatches = [...raw.matchAll(/\{[^{}]*"selectedIds"[^{}]*\}/gs)];
-    const jsonMatch = jsonMatches.length ? jsonMatches[jsonMatches.length - 1] : null;
-    if (!jsonMatch) {
-      console.error('[Gemini] No JSON with selectedIds found in:', raw);
-      return { selectedIds: [], reasoning: 'El asesor no devolvió un formato válido. Intentá generar otro outfit.' };
+    // Extraer JSON — buscar el que tenga "i":
+    const match = raw.match(/\{"i"\s*:\s*\[[\d,\s]+\]\s*,\s*"r"\s*:\s*"[^"]*"\}/);
+    if (!match) {
+      console.error('[Gemini] no match in:', raw);
+      return { selectedIds: [], reasoning: 'No se pudo procesar la respuesta. Intentá de nuevo.' };
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    const ids = Array.isArray(parsed.selectedIds) ? parsed.selectedIds : [];
-    const reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : 'Outfit seleccionado por el asesor.';
+    const parsed = JSON.parse(match[0]);
+    const indices = Array.isArray(parsed.i) ? parsed.i : [];
+    const reasoning = parsed.r || 'Outfit seleccionado.';
 
-    // Validar: máximo 1 prenda por categoría
+    // Mapear índices → IDs reales, validando categorías únicas
     const CATEGORY = {
       camisa: 'top', remera: 'top',
       pantalon: 'bottom', jeans: 'bottom',
@@ -94,20 +84,23 @@ RESPONDÉ ÚNICAMENTE con este JSON (sin texto antes ni después, sin comillas e
       cinturon: 'belt',
     };
     const seen = new Set();
-    const validIds = ids.filter(id => {
-      const g = available.find(g => g.id === id);
-      if (!g) return false;
-      const cat = CATEGORY[g.type] || g.type;
-      if (seen.has(cat)) return false;
-      seen.add(cat);
-      return true;
-    });
+    const selectedIds = indices
+      .filter(i => indexMap[i] !== undefined)
+      .map(i => available[i])
+      .filter(g => {
+        if (!g) return false;
+        const cat = CATEGORY[g.type] || g.type;
+        if (seen.has(cat)) return false;
+        seen.add(cat);
+        return true;
+      })
+      .map(g => g.id);
 
-    console.log('[Gemini] Valid IDs:', validIds);
-    return { selectedIds: validIds, reasoning };
+    console.log('[Gemini] selectedIds:', selectedIds);
+    return { selectedIds, reasoning };
 
   } catch (err) {
-    console.error('[Gemini] Error:', err);
-    return { selectedIds: [], reasoning: `Error al procesar la respuesta: ${err.message}` };
+    console.error('[Gemini] err:', err);
+    return { selectedIds: [], reasoning: `Error: ${err.message}` };
   }
 }
