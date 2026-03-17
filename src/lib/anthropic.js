@@ -41,8 +41,6 @@ Responde SOLO: INDICES:n,n,n RAZON:texto corto`;
           maxOutputTokens: 150,
           temperature: 0.3,
         },
-        // Deshabilitar thinking para no consumir tokens de output
-        thinkingConfig: { thinkingBudget: 0 },
       }),
     });
 
