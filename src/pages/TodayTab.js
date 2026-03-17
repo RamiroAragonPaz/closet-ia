@@ -54,8 +54,16 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
       .map(id => garments.find(g => g.id === id))
       .filter(Boolean);
 
-    // Fallback: si Gemini devolvió IDs inválidos, tomamos las primeras disponibles
-    const finalPieces = pieces.length > 0 ? pieces : available.slice(0, 3);
+    // Fallback inteligente: si Gemini falló, tomamos 1 de cada categoría principal
+    let finalPieces = pieces;
+    if (!finalPieces.length) {
+      const pick = (types) => available.find(g => types.includes(g.type));
+      finalPieces = [
+        pick(['camisa', 'remera']),
+        pick(['pantalon', 'jeans']),
+        pick(['saco', 'buzo']),
+      ].filter(Boolean);
+    }
     setOutfit(finalPieces);
 
     // Unsplash en paralelo, no bloquea

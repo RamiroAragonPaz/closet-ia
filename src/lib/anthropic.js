@@ -1,21 +1,4 @@
-// Asesor de imagen usando Google Gemini API (free tier: 1500 requests/día)
 const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
-
-const SYSTEM_PROMPT = `Sos un asesor de imagen masculino experto en moda smart casual para el ámbito laboral porteño.
-Tu tarea es elegir el mejor outfit posible del guardarropa disponible y justificarlo con criterio estético real.
-
-Reglas para elegir:
-- Elegí UNA prenda de cada categoría relevante: top (camisa o remera), bottom (pantalón o jeans), capa exterior (saco o buzo, si hay disponible), calzado (si hay disponible), cinturón (si hay disponible y combina con el calzado).
-- Priorizá combinaciones con paleta coherente: neutros con neutros, o un color protagonista con neutros que lo acompañen.
-- Considerá el clima: si hace frío incluí capa exterior; si hace calor prescindí de ella aunque haya disponible.
-- No repitas prendas usadas recientemente si hay alternativas disponibles.
-- El cinturón debe combinar con el calzado: cuero negro con zapatos negros/grises, cuero marrón con zapatos marrones/beige.
-
-Respondé ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown, sin bloques de código:
-{
-  "selectedIds": ["id1", "id2", "id3"],
-  "reasoning": "Explicación de 3-4 oraciones en español rioplatense explicando por qué funciona esta combinación: colores, estilo, clima, coherencia."
-}`;
 
 /**
  * Llama a Gemini para que elija las prendas Y justifique en una sola llamada.
@@ -23,29 +6,45 @@ Respondé ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown, si
  */
 export async function selectOutfitWithAI({ availableGarments, recentOutfits, weather }) {
   if (!GEMINI_API_KEY) {
-    return { selectedIds: [], reasoning: 'API key de Gemini no configurada. Agregá REACT_APP_GEMINI_API_KEY en Vercel.' };
+    return { selectedIds: [], reasoning: 'API key de Gemini no configurada.' };
   }
 
-  const garmentList = availableGarments
-    .filter(g => g.status === 'available')
-    .map(g => `- id:"${g.id}" | tipo:${g.type} | color:${g.colorName} | nombre:${g.name} | formalidad:${g.formality}`)
-    .join('\n');
+  const available = availableGarments.filter(g => g.status === 'available');
+  if (!available.length) {
+    return { selectedIds: [], reasoning: 'No hay prendas disponibles.' };
+  }
+
+  const garmentList = available
+    .map(g => `{"id":"${g.id}","tipo":"${g.type}","color":"${g.colorName}","nombre":"${g.name}","formalidad":"${g.formality}"}`)
+    .join(',\n');
 
   const historyDesc = recentOutfits.slice(0, 5)
     .map(o => o.pieces?.map(p => p.name).join(' + '))
     .filter(Boolean).join(' | ') || 'ninguno';
 
-  const weatherDesc = weather ? `${weather.temp}°C, ${weather.description}` : 'templado, sin datos precisos';
+  const weatherDesc = weather?.temp
+    ? `${weather.temp}°C, ${weather.description}`
+    : 'templado';
 
-  const prompt = `${SYSTEM_PROMPT}
+  const prompt = `Sos un asesor de imagen masculino experto en moda smart casual para el trabajo.
 
-Guardarropa disponible:
-${garmentList || 'No hay prendas disponibles.'}
+Guardarropa disponible (array JSON):
+[
+${garmentList}
+]
 
 Clima hoy en La Plata: ${weatherDesc}
-Últimos outfits usados (no repetir si hay alternativa): ${historyDesc}
+Outfits recientes a evitar repetir: ${historyDesc}
 
-Elegí el mejor outfit y devolvé el JSON.`;
+Tu tarea: elegir UN outfit completo y coherente. Reglas:
+- Elegí EXACTAMENTE 1 prenda de cada categoría que aplique: 1 top (camisa o remera), 1 bottom (pantalon o jeans), máximo 1 capa exterior (saco o buzo, solo si el clima lo amerita), máximo 1 calzado, máximo 1 cinturón.
+- NO incluyas 2 prendas del mismo tipo.
+- Priorizá paleta coherente de colores.
+- El cinturón debe combinar con el calzado.
+- No repitas prendas usadas recientemente si hay alternativas.
+
+Respondé SOLO con este JSON (sin texto antes ni después, sin markdown):
+{"selectedIds":["id_top","id_bottom"],"reasoning":"3 oraciones en español explicando por qué funciona esta combinación de colores y estilo."}`;
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
@@ -56,7 +55,7 @@ Elegí el mejor outfit y devolvé el JSON.`;
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           maxOutputTokens: 800,
-          temperature: 0.7,
+          temperature: 0.4,
           responseMimeType: 'application/json',
         },
       }),
@@ -65,25 +64,44 @@ Elegí el mejor outfit y devolvé el JSON.`;
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
       console.error('[Gemini] Error', response.status, errData);
-      return { selectedIds: [], reasoning: `Error IA (${response.status}): ${errData?.error?.message || 'revisá la consola'}` };
+      return { selectedIds: [], reasoning: `Error IA (${response.status}): ${errData?.error?.message || 'sin detalle'}` };
     }
 
     const data = await response.json();
-    const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('[Gemini] Raw response:', raw);
 
-    try {
-      const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
-      return {
-        selectedIds: parsed.selectedIds || [],
-        reasoning:   parsed.reasoning   || 'Outfit seleccionado por el asesor de imagen.',
-      };
-    } catch (parseErr) {
-      console.error('[Gemini] JSON parse error:', parseErr, raw);
-      return { selectedIds: [], reasoning: 'El asesor no pudo estructurar la respuesta. Intentá generar otro outfit.' };
-    }
+    // Limpiar posibles restos de markdown
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    const ids = Array.isArray(parsed.selectedIds) ? parsed.selectedIds : [];
+    const reasoning = parsed.reasoning || 'Outfit seleccionado por el asesor.';
+
+    // Validar que no haya dos prendas del mismo tipo
+    const CATEGORY = {
+      camisa: 'top', remera: 'top',
+      pantalon: 'bottom', jeans: 'bottom',
+      saco: 'layer', buzo: 'layer',
+      zapatos: 'shoes', zapatillas: 'shoes', mocasines: 'shoes',
+      cinturon: 'belt',
+    };
+
+    const seen = new Set();
+    const validIds = ids.filter(id => {
+      const garment = available.find(g => g.id === id);
+      if (!garment) return false;
+      const cat = CATEGORY[garment.type] || garment.type;
+      if (seen.has(cat)) return false;
+      seen.add(cat);
+      return true;
+    });
+
+    console.log('[Gemini] Selected IDs after validation:', validIds);
+    return { selectedIds: validIds, reasoning };
 
   } catch (err) {
-    console.error('[Gemini] Fetch error:', err);
-    return { selectedIds: [], reasoning: `Error de red: ${err.message}` };
+    console.error('[Gemini] Error:', err);
+    return { selectedIds: [], reasoning: `Error al procesar la respuesta de la IA: ${err.message}` };
   }
 }
