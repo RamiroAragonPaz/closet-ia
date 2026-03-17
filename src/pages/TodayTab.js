@@ -3,7 +3,6 @@ import { buildOutfit } from '../lib/outfitEngine';
 import { getOutfitReasoning } from '../lib/anthropic';
 import { saveOutfit } from '../lib/firestore';
 import { useWeather } from '../hooks/useWeather';
-import OutfitIllustration from '../components/OutfitIllustration';
 import OutfitInspo from '../components/OutfitInspo';
 import { buildUnsplashQuery, searchUnsplashPhotos } from '../lib/unsplash';
 
@@ -24,7 +23,6 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
   const [saving, setSaving]                  = useState(false);
   const [confirmed, setConfirmed]            = useState(false);
 
-  // Unsplash
   const [inspoPhotos, setInspoPhotos]        = useState([]);
   const [inspoQuery, setInspoQuery]          = useState('');
   const [loadingInspo, setLoadingInspo]      = useState(false);
@@ -41,20 +39,21 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
       return;
     }
 
-    // 1) Razonamiento IA
+    // Razonamiento IA y fotos Unsplash en paralelo
     setLoadingReason(true);
+    setLoadingInspo(true);
     setReasoning('');
-    const text = await getOutfitReasoning({
-      outfit: pieces, availableGarments: garments, recentOutfits: history, weather,
-    });
-    setReasoning(text);
-    setLoadingReason(false);
 
-    // 2) Fotos Unsplash — en paralelo, no bloquea
     const q = buildUnsplashQuery(pieces);
     setInspoQuery(q);
-    setLoadingInspo(true);
-    const photos = await searchUnsplashPhotos(q, 4);
+
+    const [text, photos] = await Promise.all([
+      getOutfitReasoning({ outfit: pieces, availableGarments: garments, recentOutfits: history, weather }),
+      searchUnsplashPhotos(q, 4),
+    ]);
+
+    setReasoning(text);
+    setLoadingReason(false);
     setInspoPhotos(photos);
     setLoadingInspo(false);
 
@@ -124,91 +123,79 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
           </p>
         ) : (
           <>
-            {/* Layout principal: ilustración + info */}
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-
-              {/* Ilustración SVG */}
-              <div style={{
-                flexShrink: 0, width: '130px',
-                background: 'var(--surface2)',
-                border: '0.5px solid var(--border)',
-                borderRadius: '10px',
-                padding: '14px 10px',
-              }}>
-                <OutfitIllustration outfit={outfit} />
-              </div>
-
-              {/* Info + razonamiento */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Prendas */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
-                  {outfit.map(g => (
-                    <div key={g.id} style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      background: 'var(--surface2)',
-                      border: '0.5px solid var(--border)',
-                      borderRadius: '8px', padding: '9px 12px',
-                    }}>
-                      <div style={{
-                        width: '12px', height: '12px', borderRadius: '50%',
-                        background: g.color, flexShrink: 0,
-                        border: '1px solid rgba(255,255,255,0.15)',
-                      }} />
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{g.type}</p>
-                        <p style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.name}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Razonamiento IA */}
-                <div style={{
-                  background: 'var(--surface2)',
-                  borderLeft: '2px solid var(--accent)',
-                  borderRadius: '0 8px 8px 0',
-                  padding: '10px 14px',
-                  marginBottom: '14px',
-                }}>
-                  <p style={{ fontSize: '10px', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>
-                    ✦ Razonamiento del asesor
-                  </p>
-                  {loadingReasoning ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--muted)', fontSize: '13px' }}>
-                      <span className="spinner" /> Consultando al asesor de imagen...
-                    </div>
-                  ) : (
-                    <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.65' }}>{reasoning}</p>
-                  )}
-                </div>
-
-                {/* Acciones */}
-                {confirmed ? (
-                  <p style={{ color: 'var(--success)', fontSize: '13px' }}>
-                    ✓ Outfit confirmado — ¡que tengas un excelente día!
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn btn-primary" onClick={handleConfirm} disabled={saving || !outfit.length}>
-                      {saving ? <span className="spinner" /> : '✓ Usar este outfit'}
-                    </button>
-                    <button className="btn btn-danger" onClick={() => {
-                      outfit.forEach(g => { g.status = 'dirty'; });
-                      generate();
-                    }}>
-                      Marcar todo a lavar
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Fotos de inspiración Unsplash */}
+            {/* 1 — Fotos de inspiración (primero) */}
             <OutfitInspo
               photos={inspoPhotos}
               loading={loadingInspo}
               query={inspoQuery}
             />
+
+            {/* Divider */}
+            <div style={{ borderTop: '0.5px solid var(--border)', margin: '18px 0' }} />
+
+            {/* 2 — Prendas del outfit */}
+            <p style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
+              Prendas seleccionadas
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+              {outfit.map(g => (
+                <div key={g.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  background: 'var(--surface2)',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: '8px', padding: '9px 12px',
+                }}>
+                  <div style={{
+                    width: '12px', height: '12px', borderRadius: '50%',
+                    background: g.color, flexShrink: 0,
+                    border: '1px solid rgba(255,255,255,0.15)',
+                  }} />
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{g.type}</p>
+                    <p style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.name}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 3 — Razonamiento IA */}
+            <div style={{
+              background: 'var(--surface2)',
+              borderLeft: '2px solid var(--accent)',
+              borderRadius: '0 8px 8px 0',
+              padding: '10px 14px',
+              marginBottom: '16px',
+            }}>
+              <p style={{ fontSize: '10px', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>
+                ✦ Razonamiento del asesor
+              </p>
+              {loadingReasoning ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--muted)', fontSize: '13px' }}>
+                  <span className="spinner" /> Consultando al asesor de imagen...
+                </div>
+              ) : (
+                <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.65' }}>{reasoning}</p>
+              )}
+            </div>
+
+            {/* 4 — Acciones */}
+            {confirmed ? (
+              <p style={{ color: 'var(--success)', fontSize: '13px' }}>
+                ✓ Outfit confirmado — ¡que tengas un excelente día!
+              </p>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-primary" onClick={handleConfirm} disabled={saving || !outfit.length}>
+                  {saving ? <span className="spinner" /> : '✓ Usar este outfit'}
+                </button>
+                <button className="btn btn-danger" onClick={() => {
+                  outfit.forEach(g => { g.status = 'dirty'; });
+                  generate();
+                }}>
+                  Marcar todo a lavar
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
