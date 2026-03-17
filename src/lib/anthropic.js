@@ -53,7 +53,7 @@ RESPONDÉ ÚNICAMENTE con este JSON (sin texto antes ni después, sin comillas e
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          maxOutputTokens: 600,
+          maxOutputTokens: 1500,
           temperature: 0.3,
         },
       }),
@@ -73,10 +73,9 @@ RESPONDÉ ÚNICAMENTE con este JSON (sin texto antes ni después, sin comillas e
     const raw = parts.filter(p => p.text).map(p => p.text).join('');
     console.log('[Gemini] Raw:', raw);
 
-    // Agarrar el ÚLTIMO objeto JSON del response (por si hay thinking con {} antes)
-    const jsonMatches = [...raw.matchAll(/\{[\s\S]*?\}/g)];
-    // Buscar el match que tenga "selectedIds"
-    const jsonMatch = jsonMatches.reverse().find(m => m[0].includes('selectedIds'));
+    // Agarrar el JSON que contenga selectedIds — greedy para capturar todo
+    const jsonMatches = [...raw.matchAll(/\{[^{}]*"selectedIds"[^{}]*\}/gs)];
+    const jsonMatch = jsonMatches.length ? jsonMatches[jsonMatches.length - 1] : null;
     if (!jsonMatch) {
       console.error('[Gemini] No JSON with selectedIds found in:', raw);
       return { selectedIds: [], reasoning: 'El asesor no devolvió un formato válido. Intentá generar otro outfit.' };
