@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { buildOutfit } from '../lib/outfitEngine';
-import { getOutfitReasoning } from '../lib/anthropic';
+import { selectOutfitWithAI } from '../lib/anthropic';
 import { buildUnsplashQuery, searchUnsplashPhotos } from '../lib/unsplash';
 import { saveOutfit } from '../lib/firestore';
 import { useWeather } from '../hooks/useWeather';
@@ -19,7 +18,7 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
 
   const [outfit, setOutfit]                  = useState([]);
   const [reasoning, setReasoning]            = useState('');
-  const [loadingReasoning, setLoadingReason] = useState(false);
+  const [loadingAI, setLoadingAI]            = useState(false);
   const [saving, setSaving]                  = useState(false);
   const [confirmed, setConfirmed]            = useState(false);
 
@@ -28,33 +27,46 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
   const [loadingInspo, setLoadingInspo]      = useState(false);
 
   const generate = useCallback(async () => {
-    const pieces = buildOutfit(garments, history);
-    setOutfit(pieces);
+    setOutfit([]);
     setConfirmed(false);
     setInspoPhotos([]);
     setInspoQuery('');
+    setReasoning('');
 
-    if (!pieces.length) {
-      setReasoning('No hay suficientes prendas disponibles. Revisá el guardarropa y marcá algunas como limpias.');
+    const available = garments.filter(g => g.status === 'available');
+    if (!available.length) {
+      setReasoning('No hay prendas disponibles. Marcá algunas como limpias en el guardarropa.');
       return;
     }
 
-    setLoadingReason(true);
-    setLoadingInspo(true);
-    setReasoning('');
-
-    const q = buildUnsplashQuery(pieces);
-    setInspoQuery(q);
-
-    const [text, photos] = await Promise.all([
-      getOutfitReasoning({ outfit: pieces, availableGarments: garments, recentOutfits: history, weather }),
-      searchUnsplashPhotos(q, 4),
-    ]);
-
+    // Gemini elige Y justifica en una sola llamada
+    setLoadingAI(true);
+    const { selectedIds, reasoning: text } = await selectOutfitWithAI({
+      availableGarments: available,
+      recentOutfits: history,
+      weather,
+    });
+    setLoadingAI(false);
     setReasoning(text);
-    setLoadingReason(false);
-    setInspoPhotos(photos);
-    setLoadingInspo(false);
+
+    // Resolvemos los objetos de prenda a partir de los IDs devueltos por Gemini
+    const pieces = selectedIds
+      .map(id => garments.find(g => g.id === id))
+      .filter(Boolean);
+
+    // Fallback: si Gemini devolvió IDs inválidos, tomamos las primeras disponibles
+    const finalPieces = pieces.length > 0 ? pieces : available.slice(0, 3);
+    setOutfit(finalPieces);
+
+    // Unsplash en paralelo, no bloquea
+    if (finalPieces.length) {
+      const q = buildUnsplashQuery(finalPieces);
+      setInspoQuery(q);
+      setLoadingInspo(true);
+      const photos = await searchUnsplashPhotos(q, 4);
+      setInspoPhotos(photos);
+      setLoadingInspo(false);
+    }
 
   }, [garments, history, weather]);
 
@@ -110,25 +122,34 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
           <span style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             {todayLabel()}
           </span>
-          <button className="btn" style={{ fontSize: '12px', padding: '5px 12px' }} onClick={generate}>
+          <button className="btn" style={{ fontSize: '12px', padding: '5px 12px' }} onClick={generate} disabled={loadingAI}>
             ↻ Otra opción
           </button>
         </div>
 
-        {outfit.length === 0 ? (
-          <p style={{ color: 'var(--muted)', fontSize: '13px', padding: '8px 0' }}>
-            No hay prendas disponibles. Marcá algunas como limpias en el guardarropa.
-          </p>
-        ) : (
+        {/* Estado cargando */}
+        {loadingAI && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '32px 0' }}>
+            <span className="spinner" style={{ width: '22px', height: '22px', borderWidth: '2px' }} />
+            <p style={{ fontSize: '13px', color: 'var(--muted)' }}>El asesor está eligiendo tu outfit...</p>
+          </div>
+        )}
+
+        {/* Resultado */}
+        {!loadingAI && outfit.length === 0 && reasoning && (
+          <p style={{ color: 'var(--muted)', fontSize: '13px', padding: '8px 0' }}>{reasoning}</p>
+        )}
+
+        {!loadingAI && outfit.length > 0 && (
           <>
             {/* 1 — Fotos inspiración */}
             <OutfitInspo photos={inspoPhotos} loading={loadingInspo} query={inspoQuery} />
 
             <div style={{ borderTop: '0.5px solid var(--border)', margin: '18px 0' }} />
 
-            {/* 2 — Prendas */}
+            {/* 2 — Prendas elegidas por la IA */}
             <p style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
-              Prendas seleccionadas
+              Prendas seleccionadas por la IA
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', marginBottom: '14px' }}>
               {outfit.map(g => (
@@ -146,7 +167,7 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
               ))}
             </div>
 
-            {/* 3 — Razonamiento IA */}
+            {/* 3 — Razonamiento */}
             <div style={{
               background: 'var(--surface2)', borderLeft: '2px solid var(--accent)',
               borderRadius: '0 8px 8px 0', padding: '10px 14px', marginBottom: '16px',
@@ -154,13 +175,7 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
               <p style={{ fontSize: '10px', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>
                 ✦ Razonamiento del asesor
               </p>
-              {loadingReasoning ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--muted)', fontSize: '13px' }}>
-                  <span className="spinner" /> Consultando al asesor de imagen...
-                </div>
-              ) : (
-                <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.65' }}>{reasoning}</p>
-              )}
+              <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: '1.65' }}>{reasoning}</p>
             </div>
 
             {/* 4 — Acciones */}
@@ -170,7 +185,7 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
               </p>
             ) : (
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn btn-primary" onClick={handleConfirm} disabled={saving || !outfit.length}>
+                <button className="btn btn-primary" onClick={handleConfirm} disabled={saving}>
                   {saving ? <span className="spinner" /> : '✓ Usar este outfit'}
                 </button>
                 <button className="btn btn-danger" onClick={() => {
