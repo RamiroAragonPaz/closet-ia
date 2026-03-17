@@ -1,0 +1,125 @@
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0f0e0c;
+  --surface:  #1a1916;
+  --surface2: #242320;
+  --border:   rgba(255,255,255,0.08);
+  --border2:  rgba(255,255,255,0.14);
+  --text:     #f0ece4;
+  --muted:    #8a8578;
+  --accent:   #c9a96e;
+  --accent2:  #e8d5b0;
+  --danger:   #c97b6e;
+  --success:  #7ec98a;
+  --info:     #6ea8c9;
+  --tag-bg:   rgba(201,169,110,0.12);
+  --tag-bd:   rgba(201,169,110,0.3);
+  --radius:   10px;
+  --radius-lg:14px;
+}
+
+html { font-size: 14px; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Typography ── */
+h1, h2, h3, .serif {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: var(--accent2);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 7px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 0.5px solid var(--border2);
+  background: none;
+  color: var(--muted);
+}
+.btn:hover { color: var(--text); border-color: var(--border2); background: var(--surface); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
+.btn-primary:hover { opacity: 0.85; background: var(--accent); color: var(--bg); }
+.btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+.btn-success:hover { border-color: var(--success); color: var(--success); }
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ── Form elements ── */
+input, select, textarea {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--surface2);
+  border: 0.5px solid var(--border2);
+  border-radius: 7px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select option { background: var(--surface2); color: var(--text); }
+label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+/* ── Tags / Badges ── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--tag-bg);
+  border: 0.5px solid var(--tag-bd);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--accent);
+}
+.badge-available { background: rgba(126,201,138,0.15); color: var(--success); border: 0.5px solid rgba(126,201,138,0.3); border-radius: 10px; padding: 2px 8px; font-size: 11px; }
+.badge-dirty    { background: rgba(201,123,110,0.15); color: var(--danger);  border: 0.5px solid rgba(201,123,110,0.3); border-radius: 10px; padding: 2px 8px; font-size: 11px; }
+
+/* ── Spinner ── */
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Fade in ── */
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
