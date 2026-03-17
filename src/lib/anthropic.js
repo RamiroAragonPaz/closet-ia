@@ -1,9 +1,5 @@
 const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
 
-/**
- * Llama a Gemini para que elija las prendas Y justifique en una sola llamada.
- * Devuelve { selectedIds: string[], reasoning: string }
- */
 export async function selectOutfitWithAI({ availableGarments, recentOutfits, weather }) {
   if (!GEMINI_API_KEY) {
     return { selectedIds: [], reasoning: 'API key de Gemini no configurada.' };
@@ -15,8 +11,8 @@ export async function selectOutfitWithAI({ availableGarments, recentOutfits, wea
   }
 
   const garmentList = available
-    .map(g => `{"id":"${g.id}","tipo":"${g.type}","color":"${g.colorName}","nombre":"${g.name}","formalidad":"${g.formality}"}`)
-    .join(',\n');
+    .map(g => `  {"id":"${g.id}","tipo":"${g.type}","color":"${g.colorName}","nombre":"${g.name}"}`)
+    .join('\n');
 
   const historyDesc = recentOutfits.slice(0, 5)
     .map(o => o.pieces?.map(p => p.name).join(' + '))
@@ -26,25 +22,28 @@ export async function selectOutfitWithAI({ availableGarments, recentOutfits, wea
     ? `${weather.temp}°C, ${weather.description}`
     : 'templado';
 
-  const prompt = `Sos un asesor de imagen masculino experto en moda smart casual para el trabajo.
+  const prompt = `Sos un asesor de imagen masculino, estilo smart casual para el trabajo.
 
-Guardarropa disponible (array JSON):
+GUARDARROPA DISPONIBLE:
 [
 ${garmentList}
 ]
 
-Clima hoy en La Plata: ${weatherDesc}
-Outfits recientes a evitar repetir: ${historyDesc}
+CLIMA HOY EN LA PLATA: ${weatherDesc}
+OUTFITS RECIENTES (evitar repetir): ${historyDesc}
 
-Tu tarea: elegir UN outfit completo y coherente. Reglas:
-- Elegí EXACTAMENTE 1 prenda de cada categoría que aplique: 1 top (camisa o remera), 1 bottom (pantalon o jeans), máximo 1 capa exterior (saco o buzo, solo si el clima lo amerita), máximo 1 calzado, máximo 1 cinturón.
-- NO incluyas 2 prendas del mismo tipo.
-- Priorizá paleta coherente de colores.
-- El cinturón debe combinar con el calzado.
-- No repitas prendas usadas recientemente si hay alternativas.
+TAREA: Elegir el mejor outfit posible siguiendo estas reglas estrictas:
+1. Elegí EXACTAMENTE 1 top: camisa o remera (obligatorio)
+2. Elegí EXACTAMENTE 1 bottom: pantalon o jeans (obligatorio)
+3. Elegí EXACTAMENTE 1 calzado: zapatos, zapatillas o mocasines (obligatorio si hay disponible)
+4. Saco/buzo: SOLO incluirlo si el clima lo justifica (frio o templado) Y si realmente mejora el look. Si hace calor (mas de 22°C) no incluyas capa exterior.
+5. Cinturón: incluirlo solo si hay disponible Y combina con el calzado elegido.
+6. NUNCA incluyas 2 prendas del mismo tipo.
+7. Priorizá paleta de colores coherente.
+8. No repitas prendas usadas recientemente si hay alternativas.
 
-Respondé SOLO con este JSON (sin texto antes ni después, sin markdown):
-{"selectedIds":["id_top","id_bottom"],"reasoning":"3 oraciones en español explicando por qué funciona esta combinación de colores y estilo."}`;
+RESPONDÉ ÚNICAMENTE con este JSON (sin texto antes ni después, sin comillas extra, sin markdown):
+{"selectedIds":["id1","id2","id3"],"reasoning":"3 oraciones en español explicando por qué funciona esta combinación."}`;
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
@@ -54,9 +53,8 @@ Respondé SOLO con este JSON (sin texto antes ni después, sin markdown):
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          maxOutputTokens: 800,
-          temperature: 0.4,
-          responseMimeType: 'application/json',
+          maxOutputTokens: 600,
+          temperature: 0.3,
         },
       }),
     });
@@ -68,17 +66,21 @@ Respondé SOLO con este JSON (sin texto antes ni después, sin markdown):
     }
 
     const data = await response.json();
-    const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    console.log('[Gemini] Raw response:', raw);
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('[Gemini] Raw:', raw);
 
-    // Limpiar posibles restos de markdown
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    // Extraer JSON aunque venga con markdown o texto extra
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('[Gemini] No JSON found in:', raw);
+      return { selectedIds: [], reasoning: 'El asesor no devolvió un formato válido. Intentá generar otro outfit.' };
+    }
 
+    const parsed = JSON.parse(jsonMatch[0]);
     const ids = Array.isArray(parsed.selectedIds) ? parsed.selectedIds : [];
-    const reasoning = parsed.reasoning || 'Outfit seleccionado por el asesor.';
+    const reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : 'Outfit seleccionado por el asesor.';
 
-    // Validar que no haya dos prendas del mismo tipo
+    // Validar: máximo 1 prenda por categoría
     const CATEGORY = {
       camisa: 'top', remera: 'top',
       pantalon: 'bottom', jeans: 'bottom',
@@ -86,22 +88,21 @@ Respondé SOLO con este JSON (sin texto antes ni después, sin markdown):
       zapatos: 'shoes', zapatillas: 'shoes', mocasines: 'shoes',
       cinturon: 'belt',
     };
-
     const seen = new Set();
     const validIds = ids.filter(id => {
-      const garment = available.find(g => g.id === id);
-      if (!garment) return false;
-      const cat = CATEGORY[garment.type] || garment.type;
+      const g = available.find(g => g.id === id);
+      if (!g) return false;
+      const cat = CATEGORY[g.type] || g.type;
       if (seen.has(cat)) return false;
       seen.add(cat);
       return true;
     });
 
-    console.log('[Gemini] Selected IDs after validation:', validIds);
+    console.log('[Gemini] Valid IDs:', validIds);
     return { selectedIds: validIds, reasoning };
 
   } catch (err) {
     console.error('[Gemini] Error:', err);
-    return { selectedIds: [], reasoning: `Error al procesar la respuesta de la IA: ${err.message}` };
+    return { selectedIds: [], reasoning: `Error al procesar la respuesta: ${err.message}` };
   }
 }
