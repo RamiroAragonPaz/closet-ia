@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 const EMOJIS = {
   camisa: '👔', remera: '👕', pantalon: '👖', jeans: '👖',
   saco: '🧥', buzo: '🧶', zapatos: '👞', zapatillas: '👟',
+  mocasines: '🥿', cinturon: '🩲',
 };
 
 export default function GarmentCard({ garment, onToggleStatus, onEdit, onDelete }) {

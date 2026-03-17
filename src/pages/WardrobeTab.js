@@ -8,6 +8,8 @@ const FILTERS = [
   { label: 'Camisas',     value: 'camisa' },
   { label: 'Pantalones',  value: 'pantalon' },
   { label: 'Sacos',       value: 'saco' },
+  { label: 'Calzado',     value: 'calzado' },
+  { label: 'Cinturones',  value: 'cinturon' },
   { label: 'Disponibles', value: 'available' },
   { label: 'A lavar',     value: 'dirty' },
 ];
@@ -21,7 +23,7 @@ export default function WardrobeTab({ garments, userId, onGarmentsChanged }) {
     if (filter === 'all')       return garments;
     if (filter === 'available') return garments.filter(g => g.status === 'available');
     if (filter === 'dirty')     return garments.filter(g => g.status === 'dirty');
-    const typeMap = { camisa: ['camisa','remera'], pantalon: ['pantalon','jeans'], saco: ['saco','buzo'] };
+    const typeMap = { camisa: ['camisa','remera'], pantalon: ['pantalon','jeans'], saco: ['saco','buzo'], calzado: ['zapatos','zapatillas','mocasines'] };
     return garments.filter(g => (typeMap[filter] || [filter]).includes(g.type));
   }
 

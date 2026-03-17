@@ -14,7 +14,8 @@ export function buildUnsplashQuery(outfit) {
   const typeMap = {
     'camisa': 'shirt', 'remera': 'tshirt', 'pantalon': 'trousers',
     'jeans': 'jeans', 'saco': 'blazer', 'buzo': 'sweater',
-    'zapatos': 'shoes', 'zapatillas': 'sneakers',
+    'zapatos': 'leather shoes', 'zapatillas': 'sneakers',
+    'mocasines': 'loafers', 'cinturon': 'belt',
   };
 
   const parts = outfit.map(g => {

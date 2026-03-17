@@ -22,6 +22,8 @@ const GARMENT_TYPES = [
   { value: 'buzo',       label: 'Buzo / Sweater' },
   { value: 'zapatos',    label: 'Zapatos' },
   { value: 'zapatillas', label: 'Zapatillas' },
+  { value: 'mocasines',   label: 'Mocasines' },
+  { value: 'cinturon',    label: 'Cinturón' },
 ];
 
 // Si recibe prop "garment" => modo edición. Sin ella => modo agregar.
