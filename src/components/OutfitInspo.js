@@ -12,7 +12,7 @@ export default function OutfitInspo({ photos, loading, query }) {
           Inspiración de estilo
         </p>
         <span style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          vía Unsplash
+          vía Pexels
         </span>
       </div>
 
@@ -74,9 +74,9 @@ export default function OutfitInspo({ photos, loading, query }) {
 
       <p style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '8px', textAlign: 'right' }}>
         Fotos de{' '}
-        <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer"
+        <a href="https://www.pexels.com" target="_blank" rel="noopener noreferrer"
           style={{ color: 'var(--muted)', textDecoration: 'underline' }}>
-          Unsplash
+          Pexels
         </a>
       </p>
 
@@ -120,7 +120,7 @@ export default function OutfitInspo({ photos, loading, query }) {
                 style={{ fontSize: '11px', color: 'var(--accent)', textDecoration: 'none' }}
                 onClick={e => e.stopPropagation()}
               >
-                Ver en Unsplash →
+                Ver en Pexels →
               </a>
             </div>
             <button

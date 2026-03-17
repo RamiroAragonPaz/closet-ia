@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { selectOutfitWithAI } from '../lib/anthropic';
-import { buildUnsplashQuery, searchUnsplashPhotos } from '../lib/unsplash';
+import { buildPexelsQuery, searchPexelsPhotos } from '../lib/pexels';
 import { saveOutfit } from '../lib/firestore';
 import { useWeather } from '../hooks/useWeather';
 import OutfitInspo from '../components/OutfitInspo';
@@ -70,10 +70,10 @@ export default function TodayTab({ garments, history, userId, onOutfitSaved }) {
 
     // Unsplash en paralelo, no bloquea
     if (finalPieces.length) {
-      const q = buildUnsplashQuery(finalPieces);
+      const q = buildPexelsQuery(finalPieces);
       setInspoQuery(q);
       setLoadingInspo(true);
-      const photos = await searchUnsplashPhotos(q, 4);
+      const photos = await searchPexelsPhotos(q, 4);
       setInspoPhotos(photos);
       setLoadingInspo(false);
     }

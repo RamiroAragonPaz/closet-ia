@@ -25,10 +25,14 @@ export async function selectOutfitWithAI({ availableGarments, recentOutfits, wea
 
   // Prompt ultra-compacto para minimizar output
   const prompt = `Asesor moda masculina smart casual laboral.
-Prendas: ${garmentList}
+Prendas disponibles (indice=tipo,color):
+${garmentList}
 Clima: ${weatherDesc}. Recientes: ${historyDesc}
-Reglas: 1 top(camisa/remera)+1 bottom(pantalon/jeans)+1 calzado si hay. Saco solo si <22C. Sin duplicados. Paleta coherente.
-Responde SOLO: INDICES:n,n,n RAZON:texto corto`;
+
+Elegir outfit: 1 top + 1 bottom + 1 calzado (obligatorio si hay) + saco solo si <22C.
+Responder EXACTAMENTE en este formato, sin nada más:
+INDICES:n,n,n
+RAZON:explicacion de 2 oraciones sobre colores y estilo.`;
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
@@ -55,8 +59,8 @@ Responde SOLO: INDICES:n,n,n RAZON:texto corto`;
     console.log('[Gemini] raw:', raw);
 
     // Parsear formato: INDICES:0,2,5 RAZON:texto
-    const idxMatch  = raw.match(/INDICES?\s*:\s*([\d,\s]+)/i);
-    const razonMatch = raw.match(/RAZ[OÓ]N?\s*:\s*(.+)/i);
+    const idxMatch   = raw.match(/INDICES?\s*:\s*([\d,\s]+)/i);
+    const razonMatch = raw.match(/RAZ[OÓ]N?\s*:\s*([\s\S]+)/i);
 
     if (!idxMatch) {
       console.error('[Gemini] no indices found in:', raw);
