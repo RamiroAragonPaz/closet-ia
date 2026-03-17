@@ -10,46 +10,39 @@ export async function selectOutfitWithAI({ availableGarments, recentOutfits, wea
     return { selectedIds: [], reasoning: 'No hay prendas disponibles.' };
   }
 
-  // Usamos índices numéricos cortos (0,1,2...) en lugar de IDs largos de Firestore
-  // Así el JSON de respuesta es mucho más corto y no se trunca
   const indexMap = {};
-  available.forEach((g, i) => { indexMap[i] = g.id; });
+  available.forEach((g, i) => { indexMap[i] = g; });
 
   const garmentList = available
-    .map((g, i) => `${i}:${g.type}|${g.colorName}|${g.name}`)
-    .join('\n');
+    .map((g, i) => `${i}=${g.type},${g.colorName}`)
+    .join(';');
 
-  const historyDesc = recentOutfits.slice(0, 3)
+  const historyDesc = recentOutfits.slice(0, 2)
     .map(o => o.pieces?.map(p => p.name).join('+'))
-    .filter(Boolean).join(' / ') || 'ninguno';
+    .filter(Boolean).join('/') || 'ninguno';
 
-  const weatherDesc = weather?.temp ? `${weather.temp}°C` : 'templado';
+  const weatherDesc = weather?.temp ? `${weather.temp}C` : '18C';
 
-  const prompt = `Asesor de imagen masculino, smart casual laboral.
-
-PRENDAS (indice:tipo|color|nombre):
-${garmentList}
-
-CLIMA: ${weatherDesc}
-RECIENTES: ${historyDesc}
-
-REGLAS:
-- 1 top (camisa/remera), 1 bottom (pantalon/jeans), 1 calzado si hay
-- Saco/buzo solo si hace frio o templado (menos de 22C)
-- Cinturon solo si combina con calzado elegido
-- Nunca 2 del mismo tipo
-- Paleta coherente, no repetir recientes
-
-Responde SOLO este JSON con indices numericos:
-{"i":[0,1,2],"r":"explicacion en 2 oraciones"}`;
+  // Prompt ultra-compacto para minimizar output
+  const prompt = `Asesor moda masculina smart casual laboral.
+Prendas: ${garmentList}
+Clima: ${weatherDesc}. Recientes: ${historyDesc}
+Reglas: 1 top(camisa/remera)+1 bottom(pantalon/jeans)+1 calzado si hay. Saco solo si <22C. Sin duplicados. Paleta coherente.
+Responde SOLO: INDICES:n,n,n RAZON:texto corto`;
 
   try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;    const res = await fetch(url, {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 200, temperature: 0.4 },
+        generationConfig: {
+          maxOutputTokens: 150,
+          temperature: 0.3,
+        },
+        // Deshabilitar thinking para no consumir tokens de output
+        thinkingConfig: { thinkingBudget: 0 },
       }),
     });
 
@@ -60,21 +53,21 @@ Responde SOLO este JSON con indices numericos:
 
     const data = await res.json();
     const parts = data.candidates?.[0]?.content?.parts || [];
-    const raw = parts.map(p => p.text || '').join('').replace(/```json|```/g, '').trim();
+    const raw = parts.map(p => p.text || '').join('').replace(/```/g, '').trim();
     console.log('[Gemini] raw:', raw);
 
-    // Extraer JSON — buscar el que tenga "i":
-    const match = raw.match(/\{[\s\S]*"i"\s*:\s*\[[\d,\s]*\][\s\S]*\}/);
-    if (!match) {
-      console.error('[Gemini] no match in:', raw);
-      return { selectedIds: [], reasoning: 'No se pudo procesar la respuesta. Intentá de nuevo.' };
+    // Parsear formato: INDICES:0,2,5 RAZON:texto
+    const idxMatch  = raw.match(/INDICES?\s*:\s*([\d,\s]+)/i);
+    const razonMatch = raw.match(/RAZ[OÓ]N?\s*:\s*(.+)/i);
+
+    if (!idxMatch) {
+      console.error('[Gemini] no indices found in:', raw);
+      return { selectedIds: [], reasoning: raw || 'No se pudo procesar la respuesta.' };
     }
 
-    const parsed = JSON.parse(match[0]);
-    const indices = Array.isArray(parsed.i) ? parsed.i : [];
-    const reasoning = parsed.r || 'Outfit seleccionado.';
+    const indices = idxMatch[1].split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    const reasoning = razonMatch ? razonMatch[1].trim() : 'Outfit seleccionado por el asesor.';
 
-    // Mapear índices → IDs reales, validando categorías únicas
     const CATEGORY = {
       camisa: 'top', remera: 'top',
       pantalon: 'bottom', jeans: 'bottom',
@@ -84,8 +77,7 @@ Responde SOLO este JSON con indices numericos:
     };
     const seen = new Set();
     const selectedIds = indices
-      .filter(i => indexMap[i] !== undefined)
-      .map(i => available[i])
+      .map(i => indexMap[i])
       .filter(g => {
         if (!g) return false;
         const cat = CATEGORY[g.type] || g.type;
@@ -95,7 +87,7 @@ Responde SOLO este JSON con indices numericos:
       })
       .map(g => g.id);
 
-    console.log('[Gemini] selectedIds:', selectedIds);
+    console.log('[Gemini] selectedIds:', selectedIds, 'reasoning:', reasoning);
     return { selectedIds, reasoning };
 
   } catch (err) {
