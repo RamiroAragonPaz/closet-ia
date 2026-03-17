@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const EMOJIS = {
   camisa: '👔', remera: '👕', pantalon: '👖', jeans: '👖',
   saco: '🧥', buzo: '🧶', zapatos: '👞', zapatillas: '👟',
 };
 
-export default function GarmentCard({ garment, onToggleStatus, onDelete }) {
+export default function GarmentCard({ garment, onToggleStatus, onEdit, onDelete }) {
   const isDirty = garment.status === 'dirty';
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <div
@@ -16,13 +17,14 @@ export default function GarmentCard({ garment, onToggleStatus, onDelete }) {
         border: '0.5px solid var(--border)',
         borderRadius: 'var(--radius)',
         overflow: 'hidden',
-        opacity: isDirty ? 0.55 : 1,
-        transition: 'opacity 0.2s, transform 0.15s, border-color 0.2s',
+        opacity: isDirty ? 0.6 : 1,
+        transition: 'opacity 0.2s, border-color 0.2s',
+        position: 'relative',
       }}
       onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
       onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
     >
-      {/* Image area */}
+      {/* Área imagen */}
       <div style={{
         height: '90px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -31,12 +33,80 @@ export default function GarmentCard({ garment, onToggleStatus, onDelete }) {
         fontSize: '32px',
       }}>
         {EMOJIS[garment.type] || '👔'}
+
+        {/* Badge estado */}
         <span
           className={isDirty ? 'badge-dirty' : 'badge-available'}
           style={{ position: 'absolute', top: '8px', right: '8px' }}
         >
           {isDirty ? 'A lavar' : 'Disponible'}
         </span>
+
+        {/* Botones editar / eliminar — aparecen al hover */}
+        <div style={{
+          position: 'absolute', top: '8px', left: '8px',
+          display: 'flex', gap: '4px',
+        }}>
+          <button
+            onClick={() => onEdit(garment)}
+            title="Editar prenda"
+            style={{
+              width: '24px', height: '24px',
+              background: 'var(--surface)',
+              border: '0.5px solid var(--border2)',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--muted)',
+              transition: 'color 0.15s, border-color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.borderColor = 'var(--border2)'; }}
+          >
+            ✎
+          </button>
+
+          {confirmDelete ? (
+            <button
+              onClick={() => onDelete(garment.id)}
+              title="Confirmar eliminación"
+              style={{
+                height: '24px', padding: '0 7px',
+                background: 'var(--danger)',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '10px',
+                color: '#fff',
+                fontFamily: 'DM Sans, sans-serif',
+              }}
+              onMouseLeave={() => setConfirmDelete(false)}
+            >
+              ¿Seguro?
+            </button>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              title="Eliminar prenda"
+              style={{
+                width: '24px', height: '24px',
+                background: 'var(--surface)',
+                border: '0.5px solid var(--border2)',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--muted)',
+                transition: 'color 0.15s, border-color 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.borderColor = 'var(--danger)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.borderColor = 'var(--border2)'; }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Body */}
@@ -59,10 +129,7 @@ export default function GarmentCard({ garment, onToggleStatus, onDelete }) {
           className="btn"
           onClick={() => onToggleStatus(garment.id, isDirty ? 'available' : 'dirty')}
           style={{
-            width: '100%',
-            padding: '5px 0',
-            fontSize: '11px',
-            borderRadius: '5px',
+            width: '100%', padding: '5px 0', fontSize: '11px', borderRadius: '5px',
             color: isDirty ? 'var(--success)' : 'var(--danger)',
           }}
         >

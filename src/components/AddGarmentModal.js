@@ -24,44 +24,46 @@ const GARMENT_TYPES = [
   { value: 'zapatillas', label: 'Zapatillas' },
 ];
 
-export default function AddGarmentModal({ onAdd, onClose }) {
-  const [type, setType] = useState('camisa');
-  const [name, setName] = useState('');
-  const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
-  const [formality, setFormality] = useState('smart-casual');
-  const [loading, setLoading] = useState(false);
+// Si recibe prop "garment" => modo edición. Sin ella => modo agregar.
+export default function GarmentModal({ garment, onSave, onClose }) {
+  const isEdit = !!garment;
+  const initialColor = isEdit
+    ? (COLOR_OPTIONS.find(c => c.name === garment.colorName) || COLOR_OPTIONS[0])
+    : COLOR_OPTIONS[0];
+
+  const [type, setType]               = useState(isEdit ? garment.type     : 'camisa');
+  const [name, setName]               = useState(isEdit ? garment.name     : '');
+  const [selectedColor, setSelected]  = useState(initialColor);
+  const [formality, setFormality]     = useState(isEdit ? garment.formality: 'smart-casual');
+  const [loading, setLoading]         = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!name.trim()) return;
     setLoading(true);
-    await onAdd({ type, name: name.trim(), color: selectedColor.hex, colorName: selectedColor.name, formality });
+    await onSave({ type, name: name.trim(), color: selectedColor.hex, colorName: selectedColor.name, formality });
     setLoading(false);
     onClose();
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,0.75)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 200, padding: '20px',
-        animation: 'fadeIn 0.15s ease',
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: 'var(--surface)',
-          border: '0.5px solid var(--border2)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '24px',
-          width: '100%', maxWidth: '420px',
-        }}
-      >
-        <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>Agregar prenda</h2>
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 200, padding: '20px',
+      animation: 'fadeIn 0.15s ease',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--surface)',
+        border: '0.5px solid var(--border2)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '24px',
+        width: '100%', maxWidth: '420px',
+      }}>
+        <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>
+          {isEdit ? 'Editar prenda' : 'Agregar prenda'}
+        </h2>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
@@ -74,11 +76,9 @@ export default function AddGarmentModal({ onAdd, onClose }) {
           <div>
             <label>Descripción</label>
             <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
+              type="text" value={name} onChange={e => setName(e.target.value)}
               placeholder="ej. Camisa Oxford azul marino"
-              required
+              required autoFocus
             />
           </div>
 
@@ -86,23 +86,12 @@ export default function AddGarmentModal({ onAdd, onClose }) {
             <label>Color principal</label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
               {COLOR_OPTIONS.map(c => (
-                <button
-                  key={c.name}
-                  type="button"
-                  title={c.name}
-                  onClick={() => setSelectedColor(c)}
-                  style={{
-                    width: '28px', height: '28px',
-                    borderRadius: '50%',
-                    background: c.hex,
-                    border: selectedColor.name === c.name
-                      ? '2px solid var(--accent)'
-                      : `1px solid ${c.light ? 'rgba(255,255,255,0.2)' : 'transparent'}`,
-                    cursor: 'pointer',
-                    transition: 'transform 0.15s',
-                    transform: selectedColor.name === c.name ? 'scale(1.15)' : 'scale(1)',
-                  }}
-                />
+                <button key={c.name} type="button" title={c.name} onClick={() => setSelected(c)} style={{
+                  width: '28px', height: '28px', borderRadius: '50%', background: c.hex, cursor: 'pointer',
+                  border: selectedColor.name === c.name ? '2px solid var(--accent)' : `1px solid ${c.light ? 'rgba(255,255,255,0.2)' : 'transparent'}`,
+                  transform: selectedColor.name === c.name ? 'scale(1.15)' : 'scale(1)',
+                  transition: 'transform 0.15s',
+                }} />
               ))}
             </div>
             <p style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '6px' }}>
@@ -121,7 +110,7 @@ export default function AddGarmentModal({ onAdd, onClose }) {
 
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
             <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
-              {loading ? <span className="spinner" /> : 'Agregar al guardarropa'}
+              {loading ? <span className="spinner" /> : isEdit ? 'Guardar cambios' : 'Agregar al guardarropa'}
             </button>
             <button type="button" className="btn" onClick={onClose}>Cancelar</button>
           </div>

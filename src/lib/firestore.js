@@ -36,6 +36,11 @@ export async function updateGarmentStatus(userId, garmentId, status) {
   await updateDoc(ref, { status });
 }
 
+export async function updateGarment(userId, garmentId, data) {
+  const ref = doc(db, 'users', userId, 'garments', garmentId);
+  await updateDoc(ref, data);
+}
+
 export async function deleteGarment(userId, garmentId) {
   const ref = doc(db, 'users', userId, 'garments', garmentId);
   await deleteDoc(ref);

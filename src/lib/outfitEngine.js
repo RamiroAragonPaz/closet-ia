@@ -1,6 +1,6 @@
 // Lógica para armar outfits evitando repeticiones recientes
 
-const OUTFIT_LAYERS = ['camisa', 'remera', 'pantalon', 'jeans', 'saco', 'buzo'];
+
 
 // Colores que combinan bien entre sí (compatibilidad cromática básica)
 const COLOR_COMPAT = {
